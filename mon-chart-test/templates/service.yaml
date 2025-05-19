@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mon-chart-test.fullname" . }}
+  labels:
+    {{- include "mon-chart-test.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "mon-chart-test.selectorLabels" . | nindent 4 }}
+
+
+
+
+  apiVersion: v1
+  kind: Service
+  metadata:
+    name: { { .Release.Name } }-svc
+  spec:
+    type: { { .Values.service.type } }
+    selector:
+      app: { { .Release.Name } }
+    ports:
+      - port: { { .Values.service.port } }
+        targetPort: { { .Values.service.port } }
+

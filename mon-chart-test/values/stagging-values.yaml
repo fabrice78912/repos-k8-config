@@ -1,0 +1,13 @@
+# Configuration pour STAGING
+replicaCount: 2
+image:
+  repository: myregistry/my-app
+  tag: staging
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+ingress:
+  enabled: true
+  host: staging.my-app.local
+springProfile: staging

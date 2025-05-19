@@ -1,0 +1,13 @@
+# Configuration pour PROD
+replicaCount: 3
+image:
+  repository: myregistry/my-app
+  tag: prod
+  pullPolicy: IfNotPresent
+service:
+  type: LoadBalancer
+  port: 80
+ingress:
+  enabled: true
+  host: my-app.example.com
+springProfile: prod

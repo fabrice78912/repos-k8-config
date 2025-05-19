@@ -1,0 +1,13 @@
+# Configuration pour DEV
+replicaCount: 1
+image:
+  repository: myregistry/my-app
+  tag: dev
+  pullPolicy: IfNotPresent
+service:
+  type: ClusterIP
+  port: 8080
+ingress:
+  enabled: true
+  host: dev.my-app.local
+springProfile: dev
