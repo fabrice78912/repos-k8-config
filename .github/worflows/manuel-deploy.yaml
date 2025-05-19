@@ -1,0 +1,69 @@
+# .github/workflows/manual-deploy.yml
+
+name: 🚀 Déploiement manuel (avec vérification d'image et docker login)
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Environnement (dev | staging | prod)"
+        required: true
+        default: dev
+      tag:
+        description: "Tag Docker à déployer (ex: abc123)"
+        required: true
+      reset_db:
+        description: "Réinitialiser la base de données ?"
+        required: false
+        default: "false"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔐 Docker login (registry privé)
+        run: |
+          echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login myregistry --username ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
+      - name: ✅ Vérifier si l'image existe dans le registry
+        id: check_image
+        run: |
+          echo "Vérification de l'image : myregistry/my-app:${{ github.event.inputs.tag }}"
+          if docker manifest inspect myregistry/my-app:${{ github.event.inputs.tag }} > /dev/null 2>&1; then
+            echo "IMAGE_EXISTS=true" >> $GITHUB_OUTPUT
+          else
+            echo "IMAGE_EXISTS=false" >> $GITHUB_OUTPUT
+        env:
+          DOCKER_CLI_EXPERIMENTAL: enabled
+
+      - name: 📥 Checkout repo-k8s-config
+        uses: actions/checkout@v3
+        with:
+          repository: ton-org/repo-k8s-config
+          token: ${{ secrets.PAT }}
+          path: config-repo
+
+      - name: ⚙️ Mise à jour du tag si image trouvée
+        if: steps.check_image.outputs.IMAGE_EXISTS == 'true'
+        run: |
+          values_file="config-repo/apps/my-app/values/${{ github.event.inputs.environment }}-values.yaml"
+          sed -i "s/^  tag: .*/  tag: ${{ github.event.inputs.tag }}/" "$values_file"
+
+      - name: ⚠️ Avertir si l’image n’existe pas
+        if: steps.check_image.outputs.IMAGE_EXISTS == 'false'
+        run: echo "⚠️ L’image avec le tag '${{ github.event.inputs.tag }}' n’existe pas. L’ancien tag sera conservé."
+
+      - name: ➕ Ajouter resetDB si demandé
+        if: ${{ github.event.inputs.reset_db == 'true' }}
+        run: |
+          echo "resetDB: true" >> config-repo/apps/my-app/values/${{ github.event.inputs.environment }}-values.yaml
+
+      - name: 🚀 Commit & Push vers repo-k8s-config
+        run: |
+          cd config-repo
+          git config user.name "github-actions"
+          git config user.email "ci@github.com"
+          git add .
+          git commit -m "🔁 MAJ déploiement ${{ github.event.inputs.environment }} avec tag ${{ github.event.inputs.tag }} (si valide)"
+          git push origin main

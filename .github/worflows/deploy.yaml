@@ -1,0 +1,64 @@
+name: CI/CD Build + Deploy
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+      - staging
+      - prod
+
+jobs:
+  build-and-deploy:
+    name: Build, Push & Update K8s Config
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Générer TAG
+        id: vars
+        run: echo "TAG=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Docker image
+        run: |
+          docker build -t myregistry/my-app:${{ steps.vars.outputs.TAG }} .
+          docker push myregistry/my-app:${{ steps.vars.outputs.TAG }}
+
+      - name: Checkout repo-k8s-config
+        uses: actions/checkout@v3
+        with:
+          repository: ton-org/repo-k8s-config
+          token: ${{ secrets.PAT }}
+          path: config-repo
+
+      - name: Déterminer le fichier de valeurs
+        id: env
+        run: |
+          BRANCH=${{ github.ref_name }}
+          if [[ "$BRANCH" == "dev" ]]; then
+            echo "ENV_FILE=dev-values.yaml" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == "staging" ]]; then
+            echo "ENV_FILE=staging-values.yaml" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=staging" >> $GITHUB_OUTPUT
+          elif [[ "$BRANCH" == "prod" ]]; then
+            echo "ENV_FILE=prod-values.yaml" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=prod" >> $GITHUB_OUTPUT
+          else
+            echo "Branche non supportée"; exit 1
+          fi
+
+      - name: Mise à jour du tag dans fichier Helm
+        run: |
+          sed -i "s/^  tag: .*/  tag: ${{ steps.vars.outputs.TAG }}/" config-repo/apps/my-app/values/${{ steps.env.outputs.ENV_FILE }}
+
+      - name: Commit & Push vers repo-k8s-config
+        run: |
+          cd config-repo
+          git config user.name "github-actions"
+          git config user.email "ci@github.com"
+          git add apps/my-app/values/${{ steps.env.outputs.ENV_FILE }}
+          git commit -m "🔄 MAJ image tag ${{ steps.vars.outputs.TAG }} pour ${{ steps.env.outputs.ENV_NAME }}"
+          git push origin HEAD:main
