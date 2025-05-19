@@ -12,7 +12,7 @@ on:
 
   push:
     branches:
-      - 'release/**'        # Déclenche build lors du merge (push) sur release /*
+      - 'release/**'        # Déclenche  build lors du merge (push) sur release /*
 
 jobs:
   build-and-push:
