@@ -1,6 +1,6 @@
 name: 🔧 CI Maven + Docker + MariaDB
 
-# 🔁 Déclenche le workflow sur PR et push vers dev ou release/*
+# 🔁 Déclenche le workflow sur PR et push vers dev ou release 3/*
 on:
   pull_request:
     branches:
