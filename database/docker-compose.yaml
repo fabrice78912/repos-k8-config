@@ -1,0 +1,19 @@
+
+version: '3.8'                            # Version de la syntaxe Docker Compose utilisée
+
+services:                                # Définition des services à lancer avec Docker Compose
+  mariadb:                              # Nom du service MariaDB
+    image: mariadb:11                   # Image officielle MariaDB version 11 utilisée pour ce service
+    container_name: mariadb_local       # Nom du conteneur Docker pour faciliter la gestion et identification
+    environment:                        # Variables d’environnement passées au conteneur MariaDB
+      MARIADB_ROOT_PASSWORD: root      # Mot de passe root de la base MariaDB (à modifier pour la prod)
+      MARIADB_DATABASE: testdb          # Base de données qui sera créée automatiquement au démarrage
+    ports:                             # Mapping des ports entre la machine hôte et le conteneur Docker
+      - "3306:3306"                    # Expose le port 3306 de MariaDB (conteneur) sur le port 3306 local
+    volumes:                           # Volumes pour la persistance des données et initialisation
+      - mariadb_data:/var/lib/mysql   # Volume Docker pour stocker les données MariaDB de façon persistante
+      - ./databases:/docker-entrypoint-initdb.d  # Monte le dossier local 'databases' contenant scripts SQL dans le conteneur, exécutés au démarrage
+    restart: unless-stopped            # Redémarre automatiquement le conteneur sauf si il est arrêté manuellement
+
+volumes:                                # Déclaration des volumes Docker utilisés pour persister les données
+  mariadb_data:                        # Volume nommé 'mariadb_data' pour les données MariaDB
