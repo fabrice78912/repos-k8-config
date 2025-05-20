@@ -1,69 +1,81 @@
-# .github/workflows/manual-deploy.yml
-
+# Nom du workflow visible dans GitHub Actions
 name: 🚀 Déploiement manuel (avec vérification d'image et docker login)
 
+# Déclenchement manuel du workflow avec paramètres
 on:
-  workflow_dispatch:
-    inputs:
-      environment:
-        description: "Environnement (dev | staging | prod)"
-        required: true
-        default: dev
-      tag:
-        description: "Tag Docker à déployer (ex: abc123)"
-        required: true
-      reset_db:
-        description: "Réinitialiser la base de données ?"
-        required: false
-        default: "false"
+  workflow_dispatch:               # Permet d’exécuter manuellement le workflow via l’interface GitHub
+    inputs:                       # Paramètres que l’utilisateur doit renseigner lors du déclenchement
+      environment:                # Paramètre "environment" (dev, staging, prod)
+        description: "Environnement (dev | staging | prod)"  # Description affichée
+        required: true            # Ce paramètre est obligatoire
+        default: dev              # Valeur par défaut
+      tag:                       # Paramètre "tag" du Docker à déployer
+        description: "Tag Docker à déployer (ex: abc123)"  # Description affichée
+        required: true            # Obligatoire
+      reset_db:                  # Paramètre optionnel pour réinitialiser la base de données
+        description: "Réinitialiser la base de données ?"  # Description
+        required: false           # Pas obligatoire
+        default: "false"          # Valeur par défaut
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest        # Exécuter ce job sur un runner Ubuntu récent
 
     steps:
       - name: 🔐 Docker login (registry privé)
         run: |
+          # Authentification au registry privé Docker avec login/password sécurisés
           echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login myregistry --username ${{ secrets.REGISTRY_USERNAME }} --password-stdin
 
       - name: ✅ Vérifier si l'image existe dans le registry
-        id: check_image
+        id: check_image            # Identifiant pour réutiliser la sortie de cette étape
         run: |
+          # Affiche dans les logs le tag recherché
           echo "Vérification de l'image : myregistry/my-app:${{ github.event.inputs.tag }}"
+          # Vérifie si le manifest Docker existe pour ce tag
           if docker manifest inspect myregistry/my-app:${{ github.event.inputs.tag }} > /dev/null 2>&1; then
+            # Si oui, on définit la variable IMAGE_EXISTS à true
             echo "IMAGE_EXISTS=true" >> $GITHUB_OUTPUT
           else
+            # Sinon, on la définit à false
             echo "IMAGE_EXISTS=false" >> $GITHUB_OUTPUT
         env:
+          # Active les fonctionnalités expérimentales nécessaires à la commande docker manifest
           DOCKER_CLI_EXPERIMENTAL: enabled
 
       - name: 📥 Checkout repo-k8s-config
         uses: actions/checkout@v3
         with:
-          repository: ton-org/repo-k8s-config
-          token: ${{ secrets.PAT }}
-          path: config-repo
+          # Clone le repo contenant la config Kubernetes (helm values etc.)
+          repository: ton-org/repo-k8s-config    # Remplacer par ton organisation et repo
+          token: ${{ secrets.PAT }}              # Token personnel stocké en secret pour accéder au repo
+          path: config-repo                      # Clone dans le dossier config-repo
 
       - name: ⚙️ Mise à jour du tag si image trouvée
-        if: steps.check_image.outputs.IMAGE_EXISTS == 'true'
+        if: steps.check_image.outputs.IMAGE_EXISTS == 'true'   # Ne s’exécute que si l’image existe
         run: |
+          # Définit le chemin vers le fichier Helm values à modifier selon l’environnement choisi
           values_file="config-repo/apps/my-app/values/${{ github.event.inputs.environment }}-values.yaml"
+          # Remplace la ligne commençant par '
+          
+          tag: ' par la nouvelle version du tag Docker dans ce fichier
           sed -i "s/^  tag: .*/  tag: ${{ github.event.inputs.tag }}/" "$values_file"
 
       - name: ⚠️ Avertir si l’image n’existe pas
-        if: steps.check_image.outputs.IMAGE_EXISTS == 'false'
+        if: steps.check_image.outputs.IMAGE_EXISTS == 'false'  # S’exécute seulement si l’image n’existe pas
         run: echo "⚠️ L’image avec le tag '${{ github.event.inputs.tag }}' n’existe pas. L’ancien tag sera conservé."
 
       - name: ➕ Ajouter resetDB si demandé
-        if: ${{ github.event.inputs.reset_db == 'true' }}
+        if: ${{ github.event.inputs.reset_db == 'true' }}       # S’exécute seulement si reset_db = true
         run: |
+          # Ajoute la clé resetDB: true à la fin du fichier values pour forcer la réinitialisation de la base
           echo "resetDB: true" >> config-repo/apps/my-app/values/${{ github.event.inputs.environment }}-values.yaml
 
       - name: 🚀 Commit & Push vers repo-k8s-config
         run: |
-          cd config-repo
-          git config user.name "github-actions"
-          git config user.email "ci@github.com"
-          git add .
-          git commit -m "🔁 MAJ déploiement ${{ github.event.inputs.environment }} avec tag ${{ github.event.inputs.tag }} (si valide)"
-          git push origin main
+          cd config-repo                            # Se place dans le dossier cloné
+          git config user.name "github-actions"   # Configure l’utilisateur Git pour le commit
+          git config user.email "ci@github.com"   # Configure l’email Git pour le commit
+          git add .                               # Ajoute toutes les modifications
+          git commit -m "🔁 MAJ déploiement ${{ github.event.inputs.environment }} avec tag ${{ github.event.inputs.tag }} (si valide)"  # Commit avec message dynamique
+          git push origin main                    # Push vers la branche main pour déclencher le déploiement
